@@ -52,11 +52,14 @@ type streamChunk struct {
 func main() {
 	// parse flags and remaining args
 	doCommit := false
+	skipConfirm := false
 	var args []string
 	for _, a := range os.Args[1:] {
 		switch a {
 		case "--commit":
 			doCommit = true
+		case "--yes":
+			skipConfirm = true
 		case "--help", "-h":
 			printHelp()
 			return
@@ -141,6 +144,15 @@ func main() {
 		}
 		msg = strings.TrimSpace(msg)
 		fmt.Println(msg)
+		
+		// ask for confirmation unless --yes is set
+		if !skipConfirm {
+			if !confirmCommit() {
+				fmt.Fprintln(os.Stderr, "commit cancelled")
+				os.Exit(0)
+			}
+		}
+		
 		out, err := exec.Command("git", "commit", "-m", msg).CombinedOutput()
 		if err != nil {
 			fatal(fmt.Errorf("git commit failed: %s", strings.TrimSpace(string(out))))
@@ -349,11 +361,14 @@ and answer questions via chat.
 Modes:
   gh coco                     Generate a conventional commit message from
                               staged changes (git diff --staged)
-  gh coco --commit            Generate a commit message and run git commit
+  gh coco --commit            Generate a commit message and prompt for
+                              confirmation before running git commit
+  gh coco --commit --yes       Generate and commit without confirmation
   gh coco <prompt>            Chat with Copilot
 
 Options:
-  --commit                    Execute git commit with the generated message
+  --commit                    Generate commit message (ask for confirmation)
+  --yes                       Skip confirmation and commit automatically
   --help, -h                  Show this help message
 
 Environment variables:
@@ -386,6 +401,17 @@ func requestID() string {
 		hex.EncodeToString(b[10:16]),
 	}
 	return strings.Join(parts, "-")
+}
+
+func confirmCommit() bool {
+	fmt.Fprint(os.Stderr, "commit with this message? (Y/n) ")
+	reader := bufio.NewReader(os.Stdin)
+	input, err := reader.ReadString('\n')
+	if err != nil {
+		return false
+	}
+	response := strings.TrimSpace(strings.ToLower(input))
+	return response == "" || response == "y"
 }
 
 func getEnvDefault(key, fallback string) string {

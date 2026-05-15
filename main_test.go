@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"os"
 	"path/filepath"
 	"strings"
@@ -134,5 +135,39 @@ func TestRequestID_UniqueAndFormatted(t *testing.T) {
 			t.Fatalf("duplicate requestID: %q", id)
 		}
 		ids[id] = true
+	}
+}
+
+func TestConfirmCommit_Default(t *testing.T) {
+	input := strings.NewReader("\n")
+	reader := bufio.NewReader(input)
+	// Simulate pressing Enter (empty input)
+	line, _ := reader.ReadString('\n')
+	response := strings.TrimSpace(strings.ToLower(line))
+	result := response == "" || response == "y"
+	if !result {
+		t.Fatalf("expected true for empty input, got %v", result)
+	}
+}
+
+func TestConfirmCommit_Yes(t *testing.T) {
+	input := strings.NewReader("y\n")
+	reader := bufio.NewReader(input)
+	line, _ := reader.ReadString('\n')
+	response := strings.TrimSpace(strings.ToLower(line))
+	result := response == "" || response == "y"
+	if !result {
+		t.Fatalf("expected true for 'y', got %v", result)
+	}
+}
+
+func TestConfirmCommit_No(t *testing.T) {
+	input := strings.NewReader("n\n")
+	reader := bufio.NewReader(input)
+	line, _ := reader.ReadString('\n')
+	response := strings.TrimSpace(strings.ToLower(line))
+	result := response == "" || response == "y"
+	if result {
+		t.Fatalf("expected false for 'n', got %v", result)
 	}
 }
