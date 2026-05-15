@@ -92,7 +92,7 @@ func main() {
 		}
 	} else {
 		messages = []chatMessage{
-			{Role: "user", Content: buildPrompt(prompt)},
+			{Role: "user", Content: prompt},
 		}
 	}
 
@@ -304,46 +304,24 @@ func stagedDiff() (string, error) {
 	return string(out), nil
 }
 
-const defaultCommitSystemPrompt = `
-あなたはConventionalCommitの記述のエキスパートです。ステージングされた実装差分に対するコミットメッセージを英語で記述してください。
-なお、コミットメッセージのプレフィックスも考えてください。選択肢は以下のとおりです。
-chore: {
-  description: "ドキュメントの生成やビルドプロセス、ライブラリなどの変更",
-  value: "chore",
-},
-ci: {
-  description: "CI用の設定やスクリプトに関する変更",
-  value: "ci",
-},
-docs: {
-  description: "ドキュメントのみの変更",
-  value: "docs",
-},
-feat: {
-  description: "新機能",
-  value: "feat",
-},
-fix: {
-  description: "不具合の修正",
-  value: "fix",
-},
-perf: {
-  description: "パフォーマンス改善を行うためのコードの変更",
-  value: "perf",
-},
-refactor: {
-  description: "バグ修正や機能の追加を行わないコードの変更",
-  value: "refactor",
-},
-style: {
-  description: "コードの処理に影響しない変更（スペースや書式設定など）",
-  value: "style",
-},
-test: {
-  description: "テストコードの変更",
-  value: "test",
-}
-`
+const defaultCommitSystemPrompt = `You are an expert at writing Git commit messages following the Conventional Commits specification.
+
+Given a git diff, output a single commit message in English. Rules:
+- Format: <type>(<optional scope>): <short description>
+- Optionally add a blank line followed by a body for complex changes
+- Choose the type that best fits the change:
+    feat:     a new feature
+    fix:      a bug fix
+    docs:     documentation changes only
+    style:    formatting, whitespace (no logic change)
+    refactor: code change that is neither a fix nor a feature
+    perf:     performance improvement
+    test:     adding or updating tests
+    chore:    build process, dependencies, tooling
+    ci:       CI configuration or scripts
+- The short description must be in the imperative mood, lowercase, no trailing period
+- Keep the subject line under 72 characters
+- Output ONLY the commit message, no explanation, no markdown fences`
 
 func commitSystemPrompt() string {
 	configDir, err := os.UserConfigDir()
@@ -391,10 +369,6 @@ Commit prompt customization:
   If the file exists, it is used as the system prompt for commit message
   generation. Falls back to the built-in prompt if not found.
 `, defaultModel, defaultAPIBaseURL, promptPath)
-}
-
-func buildPrompt(userPrompt string) string {
-	return "語尾に「にゃん」をつけて質問に回答して。 User message: " + userPrompt
 }
 
 func requestID() string {
