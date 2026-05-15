@@ -37,11 +37,13 @@ gh coco [options] [prompt]
 
 ## Environment variables
 
+These are optional. If token env vars are not set, `gh-coco` auto-detects a token from local Copilot config files.
+
 - `COPILOT_GITHUB_TOKEN` (preferred)
 - `GH_TOKEN`
 - `GITHUB_TOKEN`
 - `COPILOT_MODEL` (default: `gpt-4o`)
-- `COPILOT_API_BASE_URL` (default: `https://api.individual.githubcopilot.com`)
+- `COPILOT_API_BASE_URL` (default: `https://api.githubcopilot.com`)
 
 ## Commit prompt customization
 

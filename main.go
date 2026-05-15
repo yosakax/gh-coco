@@ -23,7 +23,7 @@ type copilotSessionToken struct {
 }
 
 const (
-	version           = "0.1.1"
+	version           = "0.1.2"
 	defaultAPIBaseURL = "https://api.githubcopilot.com"
 	defaultModel      = "gpt-4o"
 	defaultMaxTokens  = 1024
@@ -142,7 +142,7 @@ func main() {
 	}
 
 	if prompt == "" {
-		fmt.Printf("using commit prompt: %s\n", commitPromptSource)
+		fmt.Printf("****** using commit prompt: %s ******\n\n", commitPromptSource)
 	}
 
 	if prompt == "" && doCommit {
