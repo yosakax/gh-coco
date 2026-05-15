@@ -22,15 +22,18 @@ gh coco [options] [prompt]
 
 1. `gh coco`  
    Generate a Conventional Commit message from `git diff --staged` and print it.
-2. `gh coco --commit`  
-   Generate a commit message and run `git commit -m "<message>"`.
-3. `gh coco "<prompt>"`  
+2. `gh coco --commit` or `gh coco -c`  
+   Generate a commit message and prompt for confirmation before running `git commit`.
+3. `gh coco --commit --yes` or `gh coco -c -y`  
+   Generate a commit message and run `git commit` without confirmation.
+4. `gh coco "<prompt>"`  
    Chat with Copilot.
 
 ## Options
 
-- `--commit` Run `git commit` with the generated message.
-- `--help`, `-h` Show help.
+- `-c, --commit` Generate commit message (ask for confirmation).
+- `-y, --yes` Skip confirmation and commit automatically.
+- `-h, --help` Show help.
 
 ## Environment variables
 

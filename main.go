@@ -56,9 +56,9 @@ func main() {
 	var args []string
 	for _, a := range os.Args[1:] {
 		switch a {
-		case "--commit":
+		case "--commit", "-c":
 			doCommit = true
-		case "--yes":
+		case "--yes", "-y":
 			skipConfirm = true
 		case "--help", "-h":
 			printHelp()
@@ -367,9 +367,9 @@ Modes:
   gh coco <prompt>            Chat with Copilot
 
 Options:
-  --commit                    Generate commit message (ask for confirmation)
-  --yes                       Skip confirmation and commit automatically
-  --help, -h                  Show this help message
+  -c, --commit                Generate commit message (ask for confirmation)
+  -y, --yes                   Skip confirmation and commit automatically
+  -h, --help                  Show this help message
 
 Environment variables:
   COPILOT_GITHUB_TOKEN        GitHub token to use (overrides auto-detection)
