@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -49,10 +50,21 @@ type streamChunk struct {
 }
 
 func main() {
-	prompt := strings.TrimSpace(strings.Join(os.Args[1:], " "))
-	if prompt == "" {
-		prompt = "自己紹介して"
+	// parse flags and remaining args
+	doCommit := false
+	var args []string
+	for _, a := range os.Args[1:] {
+		switch a {
+		case "--commit":
+			doCommit = true
+		case "--help", "-h":
+			printHelp()
+			return
+		default:
+			args = append(args, a)
+		}
 	}
+	prompt := strings.TrimSpace(strings.Join(args, " "))
 
 	oauthToken, err := loadCopilotToken()
 	if err != nil {
@@ -64,13 +76,31 @@ func main() {
 		fatal(err)
 	}
 
+	var messages []chatMessage
+	if prompt == "" {
+		// commit message mode
+		diff, err := stagedDiff()
+		if err != nil {
+			fatal(err)
+		}
+		if strings.TrimSpace(diff) == "" {
+			fatal(fmt.Errorf("no staged changes found; run `git add` first"))
+		}
+		messages = []chatMessage{
+			{Role: "system", Content: commitSystemPrompt()},
+			{Role: "user", Content: diff},
+		}
+	} else {
+		messages = []chatMessage{
+			{Role: "user", Content: buildPrompt(prompt)},
+		}
+	}
+
 	reqBody, err := json.Marshal(chatCompletionRequest{
 		Model:     getEnvDefault("COPILOT_MODEL", defaultModel),
 		Stream:    true,
 		MaxTokens: defaultMaxTokens,
-		Messages: []chatMessage{
-			{Role: "user", Content: buildPrompt(prompt)},
-		},
+		Messages:  messages,
 	})
 	if err != nil {
 		fatal(err)
@@ -103,8 +133,23 @@ func main() {
 		fatal(fmt.Errorf("copilot API error (%d): %s", res.StatusCode, strings.TrimSpace(string(body))))
 	}
 
-	if err := streamResponse(res.Body); err != nil {
-		fatal(err)
+	if prompt == "" && doCommit {
+		// collect full message then run git commit
+		msg, err := collectResponse(res.Body)
+		if err != nil {
+			fatal(err)
+		}
+		msg = strings.TrimSpace(msg)
+		fmt.Println(msg)
+		out, err := exec.Command("git", "commit", "-m", msg).CombinedOutput()
+		if err != nil {
+			fatal(fmt.Errorf("git commit failed: %s", strings.TrimSpace(string(out))))
+		}
+		fmt.Print(string(out))
+	} else {
+		if err := streamResponse(res.Body); err != nil {
+			fatal(err)
+		}
 	}
 }
 
@@ -229,6 +274,123 @@ func streamResponse(body io.Reader) error {
 	}
 	fmt.Println()
 	return scanner.Err()
+}
+
+func collectResponse(body io.Reader) (string, error) {
+	var sb strings.Builder
+	scanner := bufio.NewScanner(body)
+	for scanner.Scan() {
+		line := scanner.Text()
+		data, ok := strings.CutPrefix(line, "data: ")
+		if !ok || strings.TrimSpace(data) == "" || data == "[DONE]" {
+			continue
+		}
+		var chunk streamChunk
+		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
+			continue
+		}
+		if len(chunk.Choices) > 0 {
+			sb.WriteString(chunk.Choices[0].Delta.Content)
+		}
+	}
+	return sb.String(), scanner.Err()
+}
+
+func stagedDiff() (string, error) {
+	out, err := exec.Command("git", "diff", "--staged").Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to get staged diff: %w", err)
+	}
+	return string(out), nil
+}
+
+const defaultCommitSystemPrompt = `
+あなたはConventionalCommitの記述のエキスパートです。ステージングされた実装差分に対するコミットメッセージを英語で記述してください。
+なお、コミットメッセージのプレフィックスも考えてください。選択肢は以下のとおりです。
+chore: {
+  description: "ドキュメントの生成やビルドプロセス、ライブラリなどの変更",
+  value: "chore",
+},
+ci: {
+  description: "CI用の設定やスクリプトに関する変更",
+  value: "ci",
+},
+docs: {
+  description: "ドキュメントのみの変更",
+  value: "docs",
+},
+feat: {
+  description: "新機能",
+  value: "feat",
+},
+fix: {
+  description: "不具合の修正",
+  value: "fix",
+},
+perf: {
+  description: "パフォーマンス改善を行うためのコードの変更",
+  value: "perf",
+},
+refactor: {
+  description: "バグ修正や機能の追加を行わないコードの変更",
+  value: "refactor",
+},
+style: {
+  description: "コードの処理に影響しない変更（スペースや書式設定など）",
+  value: "style",
+},
+test: {
+  description: "テストコードの変更",
+  value: "test",
+}
+`
+
+func commitSystemPrompt() string {
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		return defaultCommitSystemPrompt
+	}
+	data, err := os.ReadFile(filepath.Join(configDir, "gh-hello", "commit-prompt.txt"))
+	if err != nil {
+		return defaultCommitSystemPrompt
+	}
+	if s := strings.TrimSpace(string(data)); s != "" {
+		return s
+	}
+	return defaultCommitSystemPrompt
+}
+
+func printHelp() {
+	configDir, _ := os.UserConfigDir()
+	promptPath := filepath.Join(configDir, "gh-hello", "commit-prompt.txt")
+	fmt.Printf(`Usage: gh hello [options] [prompt]
+
+A GitHub CLI extension that uses GitHub Copilot to generate commit messages
+and answer questions via chat.
+
+Modes:
+  gh hello                    Generate a conventional commit message from
+                              staged changes (git diff --staged)
+  gh hello --commit           Generate a commit message and run git commit
+  gh hello <prompt>           Chat with Copilot
+
+Options:
+  --commit                    Execute git commit with the generated message
+  --help, -h                  Show this help message
+
+Environment variables:
+  COPILOT_GITHUB_TOKEN        GitHub token to use (overrides auto-detection)
+  GH_TOKEN                    GitHub token (fallback)
+  GITHUB_TOKEN                GitHub token (fallback)
+  COPILOT_MODEL               Model to use (default: %s)
+  COPILOT_API_BASE_URL        API base URL (default: %s)
+
+Commit prompt customization:
+  %s
+
+  If the file exists, it is used as the system prompt for commit message
+  generation. Falls back to the built-in prompt if not found.
+`, defaultModel, defaultAPIBaseURL, promptPath)
 }
 
 func buildPrompt(userPrompt string) string {
