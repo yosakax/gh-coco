@@ -23,7 +23,8 @@ type copilotSessionToken struct {
 }
 
 const (
-	defaultAPIBaseURL = "https://api.individual.githubcopilot.com"
+	version           = "0.1.1"
+	defaultAPIBaseURL = "https://api.githubcopilot.com"
 	defaultModel      = "gpt-4o"
 	defaultMaxTokens  = 1024
 )
@@ -119,10 +120,10 @@ func main() {
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "tmpSoft/0.0.1")
+	req.Header.Set("User-Agent", "gh-coco/"+version)
 	req.Header.Set("Copilot-Integration-Id", "vscode-chat")
+	req.Header.Set("Editor-Version", "gh-coco/"+version)
 	req.Header.Set("X-Request-Id", requestID())
-	req.Header.Set("X-Vscode-User-Agent-Library-Version", "electron-fetch")
 
 	client := &http.Client{Timeout: 60 * time.Second}
 	res, err := client.Do(req)
@@ -144,7 +145,7 @@ func main() {
 		}
 		msg = strings.TrimSpace(msg)
 		fmt.Println(msg)
-		
+
 		// ask for confirmation unless --yes is set
 		if !skipConfirm {
 			if !confirmCommit() {
@@ -152,7 +153,7 @@ func main() {
 				os.Exit(0)
 			}
 		}
-		
+
 		out, err := exec.Command("git", "commit", "-m", msg).CombinedOutput()
 		if err != nil {
 			fatal(fmt.Errorf("git commit failed: %s", strings.TrimSpace(string(out))))
