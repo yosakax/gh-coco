@@ -100,7 +100,7 @@ func TestCommitSystemPrompt_CustomFile(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", dir)
 
 	custom := "Custom prompt for testing."
-	promptDir := filepath.Join(dir, "gh-hello")
+	promptDir := filepath.Join(dir, "gh-coco")
 	if err := os.MkdirAll(promptDir, 0o755); err != nil {
 		t.Fatal(err)
 	}

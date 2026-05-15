@@ -154,7 +154,7 @@ func main() {
 }
 
 func exchangeCopilotToken(oauthToken string) (string, error) {
-	cacheFile := filepath.Join(os.TempDir(), "gh-hello-copilot-token.json")
+	cacheFile := filepath.Join(os.TempDir(), "gh-coco-copilot-token.json")
 
 	if data, err := os.ReadFile(cacheFile); err == nil {
 		var cached copilotSessionToken
@@ -328,7 +328,7 @@ func commitSystemPrompt() string {
 	if err != nil {
 		return defaultCommitSystemPrompt
 	}
-	data, err := os.ReadFile(filepath.Join(configDir, "gh-hello", "commit-prompt.txt"))
+	data, err := os.ReadFile(filepath.Join(configDir, "gh-coco", "commit-prompt.txt"))
 	if err != nil {
 		return defaultCommitSystemPrompt
 	}
@@ -340,17 +340,17 @@ func commitSystemPrompt() string {
 
 func printHelp() {
 	configDir, _ := os.UserConfigDir()
-	promptPath := filepath.Join(configDir, "gh-hello", "commit-prompt.txt")
-	fmt.Printf(`Usage: gh hello [options] [prompt]
+	promptPath := filepath.Join(configDir, "gh-coco", "commit-prompt.txt")
+	fmt.Printf(`Usage: gh coco [options] [prompt]
 
 A GitHub CLI extension that uses GitHub Copilot to generate commit messages
 and answer questions via chat.
 
 Modes:
-  gh hello                    Generate a conventional commit message from
+  gh coco                     Generate a conventional commit message from
                               staged changes (git diff --staged)
-  gh hello --commit           Generate a commit message and run git commit
-  gh hello <prompt>           Chat with Copilot
+  gh coco --commit            Generate a commit message and run git commit
+  gh coco <prompt>            Chat with Copilot
 
 Options:
   --commit                    Execute git commit with the generated message
