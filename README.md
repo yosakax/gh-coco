@@ -20,13 +20,13 @@ gh coco [options] [prompt]
 
 ### Modes
 
-1. `gh coco`  
+1. `gh coco`
    Generate a Conventional Commit message from `git diff --staged` and print it.
-2. `gh coco --commit` or `gh coco -c`  
+2. `gh coco --commit` or `gh coco -c`
    Generate a commit message and prompt for confirmation before running `git commit`.
-3. `gh coco --commit --yes` or `gh coco -c -y`  
+3. `gh coco --commit --yes` or `gh coco -c -y`
    Generate a commit message and run `git commit` without confirmation.
-4. `gh coco "<prompt>"`  
+4. `gh coco "<prompt>"`
    Chat with Copilot.
 
 ## Options
@@ -68,3 +68,15 @@ When generating a commit message, `gh coco` prints the selected prompt source fi
 go test ./...
 go run . --help
 ```
+
+## pre-commit
+
+If you want to use `.pre-commit-config.yml`, run:
+
+```bash
+pre-commit install
+pre-commit install --hook-type pre-push
+```
+
+- pre-commit: `go fmt ./...`, `go vet ./...`, basic hooks
+- pre-push: `go test ./...`

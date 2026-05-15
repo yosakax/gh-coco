@@ -20,13 +20,13 @@ gh coco [options] [prompt]
 
 ### モード
 
-1. `gh coco`  
+1. `gh coco`
    `git diff --staged` から Conventional Commit メッセージを生成して表示します。
-2. `gh coco --commit` または `gh coco -c`  
+2. `gh coco --commit` または `gh coco -c`
    コミットメッセージを生成し、確認後に `git commit` を実行します。
-3. `gh coco --commit --yes` または `gh coco -c -y`  
+3. `gh coco --commit --yes` または `gh coco -c -y`
    確認なしでコミットメッセージを生成して `git commit` を実行します。
-4. `gh coco "<prompt>"`  
+4. `gh coco "<prompt>"`
    Copilot とチャットします。
 
 ## オプション
@@ -59,7 +59,7 @@ gh coco [options] [prompt]
 - macOS: `~/Library/Application Support/gh-coco/commit-prompt.txt`
 - Windows: `%AppData%\gh-coco\commit-prompt.txt`
 
-存在し、かつ空でない最初のファイルが使われます。  
+存在し、かつ空でない最初のファイルが使われます。
 コミットメッセージ生成時には、先に使用中のプロンプトソースが表示されます。
 
 ## 開発
@@ -68,3 +68,15 @@ gh coco [options] [prompt]
 go test ./...
 go run . --help
 ```
+
+## pre-commit
+
+`.pre-commit-config.yml` を使う場合は、以下を実行してください。
+
+```bash
+pre-commit install
+pre-commit install --hook-type pre-push
+```
+
+- pre-commit: `go fmt ./...`, `go vet ./...`, basic hooks
+- pre-push: `go test ./...`
