@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -89,6 +90,7 @@ func TestCommitSystemPrompt_Default(t *testing.T) {
 	// Point UserConfigDir somewhere with no file to exercise the fallback path.
 	dir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", dir)
+	t.Chdir(dir)
 
 	got := commitSystemPrompt()
 	if got != defaultCommitSystemPrompt {
@@ -99,6 +101,7 @@ func TestCommitSystemPrompt_Default(t *testing.T) {
 func TestCommitSystemPrompt_CustomFile(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", dir)
+	t.Chdir(dir)
 
 	custom := "Custom prompt for testing."
 	promptDir := filepath.Join(dir, "gh-coco")
@@ -112,6 +115,102 @@ func TestCommitSystemPrompt_CustomFile(t *testing.T) {
 	got := commitSystemPrompt()
 	if got != custom {
 		t.Fatalf("got %q, want %q", got, custom)
+	}
+}
+
+func TestCommitSystemPrompt_RepoRootFilePreferred(t *testing.T) {
+	repo := t.TempDir()
+	cmd := exec.Command("git", "init")
+	cmd.Dir = repo
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git init failed: %v (%s)", err, strings.TrimSpace(string(out)))
+	}
+	t.Chdir(repo)
+
+	configDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", configDir)
+
+	localPrompt := "Use local prompt."
+	globalPrompt := "Use global prompt."
+
+	if err := os.WriteFile(filepath.Join(repo, ".commit-prompt.txt"), []byte(localPrompt), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	globalPromptDir := filepath.Join(configDir, "gh-coco")
+	if err := os.MkdirAll(globalPromptDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(globalPromptDir, "commit-prompt.txt"), []byte(globalPrompt), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	got := commitSystemPrompt()
+	if got != localPrompt {
+		t.Fatalf("got %q, want %q", got, localPrompt)
+	}
+}
+
+func TestCommitSystemPrompt_GlobalFallbackWhenRepoFileMissing(t *testing.T) {
+	repo := t.TempDir()
+	cmd := exec.Command("git", "init")
+	cmd.Dir = repo
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git init failed: %v (%s)", err, strings.TrimSpace(string(out)))
+	}
+	t.Chdir(repo)
+
+	configDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", configDir)
+
+	globalPrompt := "Use global prompt."
+	globalPromptDir := filepath.Join(configDir, "gh-coco")
+	if err := os.MkdirAll(globalPromptDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(globalPromptDir, "commit-prompt.txt"), []byte(globalPrompt), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	got := commitSystemPrompt()
+	if got != globalPrompt {
+		t.Fatalf("got %q, want %q", got, globalPrompt)
+	}
+}
+
+func TestResolveCommitSystemPrompt_DefaultSource(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	t.Chdir(dir)
+
+	gotPrompt, gotSource := resolveCommitSystemPrompt()
+	if gotPrompt != defaultCommitSystemPrompt {
+		t.Fatalf("expected default prompt, got %q", gotPrompt)
+	}
+	if gotSource != builtInPromptName {
+		t.Fatalf("got source %q, want %q", gotSource, builtInPromptName)
+	}
+}
+
+func TestResolveCommitSystemPrompt_SourcePath(t *testing.T) {
+	repo := t.TempDir()
+	cmd := exec.Command("git", "init")
+	cmd.Dir = repo
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git init failed: %v (%s)", err, strings.TrimSpace(string(out)))
+	}
+	t.Chdir(repo)
+
+	configDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", configDir)
+
+	localPath := filepath.Join(repo, ".commit-prompt.txt")
+	if err := os.WriteFile(localPath, []byte("Use local prompt."), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	_, gotSource := resolveCommitSystemPrompt()
+	if gotSource != localPath {
+		t.Fatalf("got source %q, want %q", gotSource, localPath)
 	}
 }
 

@@ -45,17 +45,20 @@ gh coco [options] [prompt]
 
 ## Commit prompt customization
 
-You can override the built-in commit system prompt by creating:
+You can override the built-in commit system prompt with this priority order:
 
-`{UserConfigDir}/gh-coco/commit-prompt.txt`
+1. `.commit-prompt.txt` at the repository root
+2. `{UserConfigDir}/gh-coco/commit-prompt.txt`
+3. built-in default prompt
 
-Examples:
+Examples for the user config path:
 
 - Linux: `~/.config/gh-coco/commit-prompt.txt`
 - macOS: `~/Library/Application Support/gh-coco/commit-prompt.txt`
 - Windows: `%AppData%\gh-coco\commit-prompt.txt`
 
-If the file does not exist (or is empty), the built-in prompt is used.
+The first existing non-empty file is used.
+When generating a commit message, `gh coco` prints the selected prompt source first.
 
 ## Development
 

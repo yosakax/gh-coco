@@ -27,6 +27,7 @@ const (
 	defaultAPIBaseURL = "https://api.githubcopilot.com"
 	defaultModel      = "gpt-4o"
 	defaultMaxTokens  = 1024
+	builtInPromptName = "built-in default"
 )
 
 type chatCompletionRequest struct {
@@ -81,6 +82,7 @@ func main() {
 	}
 
 	var messages []chatMessage
+	var commitPromptSource string
 	if prompt == "" {
 		// commit message mode
 		diff, err := stagedDiff()
@@ -90,8 +92,10 @@ func main() {
 		if strings.TrimSpace(diff) == "" {
 			fatal(fmt.Errorf("no staged changes found; run `git add` first"))
 		}
+		systemPrompt, source := resolveCommitSystemPrompt()
+		commitPromptSource = source
 		messages = []chatMessage{
-			{Role: "system", Content: commitSystemPrompt()},
+			{Role: "system", Content: systemPrompt},
 			{Role: "user", Content: diff},
 		}
 	} else {
@@ -135,6 +139,10 @@ func main() {
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
 		body, _ := io.ReadAll(io.LimitReader(res.Body, 8192))
 		fatal(fmt.Errorf("copilot API error (%d): %s", res.StatusCode, strings.TrimSpace(string(body))))
+	}
+
+	if prompt == "" {
+		fmt.Printf("using commit prompt: %s\n", commitPromptSource)
 	}
 
 	if prompt == "" && doCommit {
@@ -337,23 +345,46 @@ Given a git diff, output a single commit message in English. Rules:
 - Output ONLY the commit message, no explanation, no markdown fences`
 
 func commitSystemPrompt() string {
-	configDir, err := os.UserConfigDir()
+	prompt, _ := resolveCommitSystemPrompt()
+	return prompt
+}
+
+func resolveCommitSystemPrompt() (string, string) {
+	for _, path := range commitPromptCandidates() {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		if s := strings.TrimSpace(string(data)); s != "" {
+			return s, path
+		}
+	}
+	return defaultCommitSystemPrompt, builtInPromptName
+}
+
+func commitPromptCandidates() []string {
+	paths := make([]string, 0, 2)
+	if repoRoot, err := gitRepoRoot(); err == nil && repoRoot != "" {
+		paths = append(paths, filepath.Join(repoRoot, ".commit-prompt.txt"))
+	}
+	if configDir, err := os.UserConfigDir(); err == nil && configDir != "" {
+		paths = append(paths, filepath.Join(configDir, "gh-coco", "commit-prompt.txt"))
+	}
+	return paths
+}
+
+func gitRepoRoot() (string, error) {
+	out, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
 	if err != nil {
-		return defaultCommitSystemPrompt
+		return "", err
 	}
-	data, err := os.ReadFile(filepath.Join(configDir, "gh-coco", "commit-prompt.txt"))
-	if err != nil {
-		return defaultCommitSystemPrompt
-	}
-	if s := strings.TrimSpace(string(data)); s != "" {
-		return s
-	}
-	return defaultCommitSystemPrompt
+	return strings.TrimSpace(string(out)), nil
 }
 
 func printHelp() {
 	configDir, _ := os.UserConfigDir()
-	promptPath := filepath.Join(configDir, "gh-coco", "commit-prompt.txt")
+	localPromptPath := ".commit-prompt.txt (repository root)"
+	globalPromptPath := filepath.Join(configDir, "gh-coco", "commit-prompt.txt")
 	fmt.Printf(`Usage: gh coco [options] [prompt]
 
 A GitHub CLI extension that uses GitHub Copilot to generate commit messages
@@ -380,11 +411,12 @@ Environment variables:
   COPILOT_API_BASE_URL        API base URL (default: %s)
 
 Commit prompt customization:
-  %s
+  1. %s
+  2. %s
 
-  If the file exists, it is used as the system prompt for commit message
-  generation. Falls back to the built-in prompt if not found.
-`, defaultModel, defaultAPIBaseURL, promptPath)
+  The first existing non-empty file is used as the system prompt for commit
+  message generation. Falls back to the built-in prompt if none are found.
+`, defaultModel, defaultAPIBaseURL, localPromptPath, globalPromptPath)
 }
 
 func requestID() string {
