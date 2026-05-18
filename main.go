@@ -18,8 +18,9 @@ import (
 )
 
 type copilotSessionToken struct {
-	Token     string    `json:"token"`
-	ExpiresAt time.Time `json:"expires_at"`
+	Token      string    `json:"token"`
+	ExpiresAt  time.Time `json:"expires_at"`
+	APIBaseURL string    `json:"api_base_url,omitempty"`
 }
 
 const (
@@ -76,7 +77,7 @@ func main() {
 		fatal(err)
 	}
 
-	token, err := exchangeCopilotToken(oauthToken)
+	sessionToken, err := exchangeCopilotToken(oauthToken)
 	if err != nil {
 		fatal(err)
 	}
@@ -117,11 +118,17 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(getEnvDefault("COPILOT_API_BASE_URL", defaultAPIBaseURL), "/")+"/chat/completions", bytes.NewReader(reqBody))
+	defaultBaseURL := sessionToken.APIBaseURL
+	if strings.TrimSpace(defaultBaseURL) == "" {
+		defaultBaseURL = defaultAPIBaseURL
+	}
+	apiBaseURL := strings.TrimRight(getEnvDefault("COPILOT_API_BASE_URL", defaultBaseURL), "/")
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiBaseURL+"/chat/completions", bytes.NewReader(reqBody))
 	if err != nil {
 		fatal(err)
 	}
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Authorization", "Bearer "+sessionToken.Token)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", "gh-coco/"+version)
@@ -174,19 +181,24 @@ func main() {
 	}
 }
 
-func exchangeCopilotToken(oauthToken string) (string, error) {
+func exchangeCopilotToken(oauthToken string) (copilotSessionToken, error) {
 	cacheFile := filepath.Join(os.TempDir(), "gh-coco-copilot-token.json")
 
 	if data, err := os.ReadFile(cacheFile); err == nil {
 		var cached copilotSessionToken
-		if json.Unmarshal(data, &cached) == nil && time.Now().Before(cached.ExpiresAt.Add(-2*time.Minute)) {
-			return cached.Token, nil
+		if json.Unmarshal(data, &cached) == nil &&
+			cached.Token != "" &&
+			time.Now().Before(cached.ExpiresAt.Add(-2*time.Minute)) {
+			if strings.TrimSpace(cached.APIBaseURL) == "" {
+				cached.APIBaseURL = defaultAPIBaseURL
+			}
+			return cached, nil
 		}
 	}
 
 	req, err := http.NewRequest(http.MethodGet, "https://api.github.com/copilot_internal/v2/token", nil)
 	if err != nil {
-		return "", err
+		return copilotSessionToken{}, err
 	}
 	req.Header.Set("Authorization", "token "+oauthToken)
 	req.Header.Set("Accept", "application/json")
@@ -195,24 +207,27 @@ func exchangeCopilotToken(oauthToken string) (string, error) {
 	client := &http.Client{Timeout: 10 * time.Second}
 	res, err := client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("token exchange request failed: %w", err)
+		return copilotSessionToken{}, fmt.Errorf("token exchange request failed: %w", err)
 	}
 	defer res.Body.Close()
 
 	if res.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(res.Body, 2048))
-		return "", fmt.Errorf("token exchange failed (%d): %s", res.StatusCode, strings.TrimSpace(string(body)))
+		return copilotSessionToken{}, fmt.Errorf("token exchange failed (%d): %s", res.StatusCode, strings.TrimSpace(string(body)))
 	}
 
 	var tokenResp struct {
 		Token     string  `json:"token"`
 		ExpiresAt float64 `json:"expires_at"`
+		Endpoints struct {
+			API string `json:"api"`
+		} `json:"endpoints"`
 	}
 	if err := json.NewDecoder(res.Body).Decode(&tokenResp); err != nil {
-		return "", fmt.Errorf("failed to decode token response: %w", err)
+		return copilotSessionToken{}, fmt.Errorf("failed to decode token response: %w", err)
 	}
 	if tokenResp.Token == "" {
-		return "", fmt.Errorf("empty token from copilot token endpoint")
+		return copilotSessionToken{}, fmt.Errorf("empty token from copilot token endpoint")
 	}
 
 	expiresAt := time.Unix(int64(tokenResp.ExpiresAt), 0)
@@ -220,11 +235,23 @@ func exchangeCopilotToken(oauthToken string) (string, error) {
 		expiresAt = time.Now().Add(25 * time.Minute)
 	}
 
-	if data, err := json.Marshal(copilotSessionToken{Token: tokenResp.Token, ExpiresAt: expiresAt}); err == nil {
+	sessionToken := copilotSessionToken{
+		Token:      tokenResp.Token,
+		ExpiresAt:  expiresAt,
+		APIBaseURL: resolveCopilotBaseURL(tokenResp.Endpoints.API),
+	}
+	if data, err := json.Marshal(sessionToken); err == nil {
 		_ = os.WriteFile(cacheFile, data, 0o600)
 	}
 
-	return tokenResp.Token, nil
+	return sessionToken, nil
+}
+
+func resolveCopilotBaseURL(apiEndpoint string) string {
+	if baseURL := strings.TrimRight(strings.TrimSpace(apiEndpoint), "/"); baseURL != "" {
+		return baseURL
+	}
+	return defaultAPIBaseURL
 }
 
 func loadCopilotToken() (string, error) {
@@ -408,7 +435,7 @@ Environment variables:
   GH_TOKEN                    GitHub token (fallback)
   GITHUB_TOKEN                GitHub token (fallback)
   COPILOT_MODEL               Model to use (default: %s)
-  COPILOT_API_BASE_URL        API base URL (default: %s)
+  COPILOT_API_BASE_URL        API base URL override (auto-detected by default)
 
 Commit prompt customization:
   1. %s
@@ -416,7 +443,7 @@ Commit prompt customization:
 
   The first existing non-empty file is used as the system prompt for commit
   message generation. Falls back to the built-in prompt if none are found.
-`, defaultModel, defaultAPIBaseURL, localPromptPath, globalPromptPath)
+`, defaultModel, localPromptPath, globalPromptPath)
 }
 
 func requestID() string {

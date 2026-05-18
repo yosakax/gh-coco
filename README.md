@@ -43,7 +43,7 @@ These are optional. If token env vars are not set, `gh-coco` auto-detects a toke
 - `GH_TOKEN`
 - `GITHUB_TOKEN`
 - `COPILOT_MODEL` (default: `gpt-4o`)
-- `COPILOT_API_BASE_URL` (default: `https://api.githubcopilot.com`)
+- `COPILOT_API_BASE_URL` (override auto-detected endpoint from token response)
 
 ## Commit prompt customization
 

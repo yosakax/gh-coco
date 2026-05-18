@@ -54,6 +54,20 @@ func TestGetEnvDefault(t *testing.T) {
 	}
 }
 
+func TestResolveCopilotBaseURL_UsesEndpointAndTrimsSlash(t *testing.T) {
+	got := resolveCopilotBaseURL("https://api.business.githubcopilot.com/")
+	if got != "https://api.business.githubcopilot.com" {
+		t.Fatalf("got %q, want %q", got, "https://api.business.githubcopilot.com")
+	}
+}
+
+func TestResolveCopilotBaseURL_FallsBackToDefault(t *testing.T) {
+	got := resolveCopilotBaseURL("  ")
+	if got != defaultAPIBaseURL {
+		t.Fatalf("got %q, want %q", got, defaultAPIBaseURL)
+	}
+}
+
 func TestCollectResponse(t *testing.T) {
 	lines := []string{
 		`data: {"choices":[{"delta":{"content":"feat"},"finish_reason":null}]}`,

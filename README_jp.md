@@ -43,7 +43,7 @@ gh coco [options] [prompt]
 - `GH_TOKEN`
 - `GITHUB_TOKEN`
 - `COPILOT_MODEL`（デフォルト: `gpt-4o`）
-- `COPILOT_API_BASE_URL`（デフォルト: `https://api.githubcopilot.com`）
+- `COPILOT_API_BASE_URL`（トークン応答から自動検出されるエンドポイントを上書き）
 
 ## コミットプロンプトのカスタマイズ
 
