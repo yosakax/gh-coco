@@ -24,7 +24,7 @@ type copilotSessionToken struct {
 }
 
 const (
-	version           = "0.1.2"
+	version           = "0.2.0"
 	defaultAPIBaseURL = "https://api.githubcopilot.com"
 	defaultModel      = "gpt-4o"
 	defaultMaxTokens  = 1024
@@ -65,6 +65,9 @@ func main() {
 			skipConfirm = true
 		case "--help", "-h":
 			printHelp()
+			return
+		case "--version", "-v":
+			fmt.Println(version)
 			return
 		default:
 			args = append(args, a)
@@ -428,6 +431,7 @@ Modes:
 Options:
   -c, --commit                Generate commit message (ask for confirmation)
   -y, --yes                   Skip confirmation and commit automatically
+  -v, --version               Show version information
   -h, --help                  Show this help message
 
 Environment variables:

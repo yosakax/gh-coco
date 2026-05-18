@@ -33,6 +33,7 @@ gh coco [options] [prompt]
 
 - `-c, --commit` Generate commit message (ask for confirmation).
 - `-y, --yes` Skip confirmation and commit automatically.
+- `-v, --version` Show version information.
 - `-h, --help` Show help.
 
 ## Environment variables
