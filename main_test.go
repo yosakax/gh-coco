@@ -9,38 +9,59 @@ import (
 	"testing"
 )
 
-func TestTokenFromFile(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "apps.json")
-	if err := os.WriteFile(path, []byte(`{"github.com:Iv1.test":{"oauth_token":"abc123","user":"octo"}}`), 0o600); err != nil {
-		t.Fatal(err)
-	}
+func TestLoadCopilotToken_FromEnv(t *testing.T) {
+	t.Setenv("COPILOT_GITHUB_TOKEN", "env-token")
+	t.Setenv("GH_TOKEN", "")
+	t.Setenv("GITHUB_TOKEN", "")
 
-	token, err := tokenFromFile(path)
+	token, err := loadCopilotToken()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if token != "abc123" {
-		t.Fatalf("got %q, want %q", token, "abc123")
+	if token != "env-token" {
+		t.Fatalf("got %q, want %q", token, "env-token")
 	}
 }
 
-func TestTokenFromFile_NotFound(t *testing.T) {
-	_, err := tokenFromFile(filepath.Join(t.TempDir(), "nonexistent.json"))
-	if err == nil {
-		t.Fatal("expected error for missing file, got nil")
-	}
-}
+func TestLoadCopilotToken_FromGhCLI(t *testing.T) {
+	t.Setenv("COPILOT_GITHUB_TOKEN", "")
+	t.Setenv("GH_TOKEN", "")
+	t.Setenv("GITHUB_TOKEN", "")
 
-func TestTokenFromFile_NoToken(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "apps.json")
-	if err := os.WriteFile(path, []byte(`{"github.com:Iv1.test":{"oauth_token":"","user":"octo"}}`), 0o600); err != nil {
+	ghPath := filepath.Join(dir, "gh")
+	if err := os.WriteFile(ghPath, []byte("#!/bin/sh\necho gh-cli-token\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	_, err := tokenFromFile(path)
+	t.Setenv("PATH", dir)
+
+	token, err := loadCopilotToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if token != "gh-cli-token" {
+		t.Fatalf("got %q, want %q", token, "gh-cli-token")
+	}
+}
+
+func TestLoadCopilotToken_GhCLIFailure(t *testing.T) {
+	t.Setenv("COPILOT_GITHUB_TOKEN", "")
+	t.Setenv("GH_TOKEN", "")
+	t.Setenv("GITHUB_TOKEN", "")
+
+	dir := t.TempDir()
+	ghPath := filepath.Join(dir, "gh")
+	if err := os.WriteFile(ghPath, []byte("#!/bin/sh\necho auth failed >&2\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir)
+
+	_, err := loadCopilotToken()
 	if err == nil {
-		t.Fatal("expected error for empty token, got nil")
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "gh auth login") {
+		t.Fatalf("expected error to mention gh auth login, got %q", err.Error())
 	}
 }
 

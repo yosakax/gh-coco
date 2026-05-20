@@ -24,7 +24,7 @@ type copilotSessionToken struct {
 }
 
 const (
-	version           = "0.2.0"
+	version           = "0.2.1"
 	defaultAPIBaseURL = "https://api.githubcopilot.com"
 	defaultModel      = "gpt-4o"
 	defaultMaxTokens  = 1024
@@ -264,47 +264,24 @@ func loadCopilotToken() (string, error) {
 		}
 	}
 
-	for _, path := range copilotTokenFiles() {
-		token, err := tokenFromFile(path)
-		if err == nil && token != "" {
-			return token, nil
-		}
+	token, err := tokenFromGhCLI()
+	if err == nil && token != "" {
+		return token, nil
 	}
 
-	return "", fmt.Errorf("no Copilot token found; set COPILOT_GITHUB_TOKEN or sign in to Copilot")
+	return "", fmt.Errorf("no Copilot token found; set COPILOT_GITHUB_TOKEN or authenticate with `gh auth login`")
 }
 
-func copilotTokenFiles() []string {
-	home, err := os.UserHomeDir()
+func tokenFromGhCLI() (string, error) {
+	out, err := exec.Command("gh", "auth", "token").CombinedOutput()
 	if err != nil {
-		return nil
+		return "", fmt.Errorf("failed to get token from `gh auth token`: %s", strings.TrimSpace(string(out)))
 	}
-	return []string{
-		filepath.Join(home, ".config", "github-copilot", "apps.json"),
-		filepath.Join(home, ".config", "github-copilot", "hosts.json"),
+	token := strings.TrimSpace(string(out))
+	if token == "" {
+		return "", fmt.Errorf("`gh auth token` returned an empty token")
 	}
-}
-
-func tokenFromFile(path string) (string, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return "", err
-	}
-
-	var entries map[string]struct {
-		OAuthToken string `json:"oauth_token"`
-	}
-	if err := json.Unmarshal(data, &entries); err != nil {
-		return "", err
-	}
-
-	for _, entry := range entries {
-		if token := strings.TrimSpace(entry.OAuthToken); token != "" {
-			return token, nil
-		}
-	}
-
-	return "", fmt.Errorf("no oauth token in %s", path)
+	return token, nil
 }
 
 func streamResponse(body io.Reader) error {
@@ -438,6 +415,7 @@ Environment variables:
   COPILOT_GITHUB_TOKEN        GitHub token to use (overrides auto-detection)
   GH_TOKEN                    GitHub token (fallback)
   GITHUB_TOKEN                GitHub token (fallback)
+                              If none are set, uses 'gh auth token'
   COPILOT_MODEL               Model to use (default: %s)
   COPILOT_API_BASE_URL        API base URL override (auto-detected by default)
 

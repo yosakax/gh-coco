@@ -38,7 +38,7 @@ gh coco [options] [prompt]
 
 ## 環境変数
 
-以下は任意です。トークン系の環境変数を設定しない場合、`gh-coco` はローカルの Copilot 設定ファイルからトークンを自動検出します。
+以下は任意です。トークン系の環境変数を設定しない場合、`gh-coco` は `gh auth token` でトークンを取得します。
 
 - `COPILOT_GITHUB_TOKEN`（推奨）
 - `GH_TOKEN`

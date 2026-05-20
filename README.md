@@ -38,7 +38,7 @@ gh coco [options] [prompt]
 
 ## Environment variables
 
-These are optional. If token env vars are not set, `gh-coco` auto-detects a token from local Copilot config files.
+These are optional. If token env vars are not set, `gh-coco` falls back to `gh auth token`.
 
 - `COPILOT_GITHUB_TOKEN` (preferred)
 - `GH_TOKEN`
