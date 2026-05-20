@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	version            = "0.3.0"
+	version            = "0.3.1"
 	defaultForcedModel = "gpt-4.1"
 	builtInPromptName  = "built-in default"
 )
@@ -121,7 +121,8 @@ const defaultCommitSystemPrompt = `You are an expert at writing Git commit messa
 
 Given a git diff, output a single commit message in English. Rules:
 - Format: <type>(<optional scope>): <short description>
-- Optionally add a blank line followed by a body for complex changes
+- For complex changes, add a blank line after the subject followed by a body
+- The body must be written as a bullet list (each item starting with "- ")
 - Choose the type that best fits the change:
     feat:     a new feature
     fix:      a bug fix
@@ -134,7 +135,7 @@ Given a git diff, output a single commit message in English. Rules:
     ci:       CI configuration or scripts
 - The short description must be in the imperative mood, lowercase, no trailing period
 - Keep the subject line under 72 characters
-- Output ONLY the commit message, no explanation, no markdown fences`
+- Output ONLY the raw commit message text. Do not include any explanation, preamble, markdown fences, or any text other than the commit message itself.`
 
 func commitSystemPrompt() string {
 	prompt, _ := resolveCommitSystemPrompt()
