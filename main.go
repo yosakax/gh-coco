@@ -2,67 +2,39 @@ package main
 
 import (
 	"bufio"
-	"bytes"
-	"context"
-	crand "crypto/rand"
-	"encoding/hex"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
 )
-
-type copilotSessionToken struct {
-	Token      string    `json:"token"`
-	ExpiresAt  time.Time `json:"expires_at"`
-	APIBaseURL string    `json:"api_base_url,omitempty"`
-}
 
 const (
-	version           = "0.2.1"
-	defaultAPIBaseURL = "https://api.githubcopilot.com"
-	defaultModel      = "gpt-4o"
-	defaultMaxTokens  = 1024
-	builtInPromptName = "built-in default"
+	version            = "0.3.0"
+	defaultForcedModel = "gpt-4.1"
+	builtInPromptName  = "built-in default"
 )
 
-type chatCompletionRequest struct {
-	Model     string        `json:"model"`
-	Stream    bool          `json:"stream"`
-	MaxTokens int           `json:"max_tokens,omitempty"`
-	Messages  []chatMessage `json:"messages"`
-}
-
-type chatMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
-}
-
-type streamChunk struct {
-	Choices []struct {
-		Delta struct {
-			Content string `json:"content"`
-		} `json:"delta"`
-		FinishReason string `json:"finish_reason"`
-	} `json:"choices"`
-}
-
 func main() {
-	// parse flags and remaining args
 	doCommit := false
 	skipConfirm := false
+	model := ""
 	var args []string
-	for _, a := range os.Args[1:] {
+
+	rawArgs := os.Args[1:]
+	for i := 0; i < len(rawArgs); i++ {
+		a := rawArgs[i]
 		switch a {
 		case "--commit", "-c":
 			doCommit = true
 		case "--yes", "-y":
 			skipConfirm = true
+		case "--model", "-m":
+			if i+1 >= len(rawArgs) {
+				fatal(fmt.Errorf("missing value for %s", a))
+			}
+			model = rawArgs[i+1]
+			i++
 		case "--help", "-h":
 			printHelp()
 			return
@@ -70,25 +42,28 @@ func main() {
 			fmt.Println(version)
 			return
 		default:
+			if strings.HasPrefix(a, "--model=") {
+				model = strings.TrimPrefix(a, "--model=")
+				continue
+			}
 			args = append(args, a)
 		}
 	}
+
+	if strings.TrimSpace(model) == "" {
+		model = strings.TrimSpace(os.Getenv("COPILOT_MODEL"))
+	}
+	var err error
+	model, err = resolveModel(model)
+	if err != nil {
+		fatal(err)
+	}
+
 	prompt := strings.TrimSpace(strings.Join(args, " "))
-
-	oauthToken, err := loadCopilotToken()
-	if err != nil {
-		fatal(err)
-	}
-
-	sessionToken, err := exchangeCopilotToken(oauthToken)
-	if err != nil {
-		fatal(err)
-	}
-
-	var messages []chatMessage
+	var copilotPrompt string
 	var commitPromptSource string
+
 	if prompt == "" {
-		// commit message mode
 		diff, err := stagedDiff()
 		if err != nil {
 			fatal(err)
@@ -98,73 +73,24 @@ func main() {
 		}
 		systemPrompt, source := resolveCommitSystemPrompt()
 		commitPromptSource = source
-		messages = []chatMessage{
-			{Role: "system", Content: systemPrompt},
-			{Role: "user", Content: diff},
-		}
+		copilotPrompt = buildCommitPrompt(systemPrompt, diff)
 	} else {
-		messages = []chatMessage{
-			{Role: "user", Content: prompt},
-		}
-	}
-
-	reqBody, err := json.Marshal(chatCompletionRequest{
-		Model:     getEnvDefault("COPILOT_MODEL", defaultModel),
-		Stream:    true,
-		MaxTokens: defaultMaxTokens,
-		Messages:  messages,
-	})
-	if err != nil {
-		fatal(err)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-
-	defaultBaseURL := sessionToken.APIBaseURL
-	if strings.TrimSpace(defaultBaseURL) == "" {
-		defaultBaseURL = defaultAPIBaseURL
-	}
-	apiBaseURL := strings.TrimRight(getEnvDefault("COPILOT_API_BASE_URL", defaultBaseURL), "/")
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiBaseURL+"/chat/completions", bytes.NewReader(reqBody))
-	if err != nil {
-		fatal(err)
-	}
-	req.Header.Set("Authorization", "Bearer "+sessionToken.Token)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "gh-coco/"+version)
-	req.Header.Set("Copilot-Integration-Id", "vscode-chat")
-	req.Header.Set("Editor-Version", "gh-coco/"+version)
-	req.Header.Set("X-Request-Id", requestID())
-
-	client := &http.Client{Timeout: 60 * time.Second}
-	res, err := client.Do(req)
-	if err != nil {
-		fatal(err)
-	}
-	defer res.Body.Close()
-
-	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		body, _ := io.ReadAll(io.LimitReader(res.Body, 8192))
-		fatal(fmt.Errorf("copilot API error (%d): %s", res.StatusCode, strings.TrimSpace(string(body))))
+		copilotPrompt = prompt
 	}
 
 	if prompt == "" {
 		fmt.Printf("****** using commit prompt: %s ******\n\n", commitPromptSource)
 	}
 
+	response, err := runCopilotPrompt(copilotPrompt, model)
+	if err != nil {
+		fatal(err)
+	}
+
 	if prompt == "" && doCommit {
-		// collect full message then run git commit
-		msg, err := collectResponse(res.Body)
-		if err != nil {
-			fatal(err)
-		}
-		msg = strings.TrimSpace(msg)
+		msg := strings.TrimSpace(response)
 		fmt.Println(msg)
 
-		// ask for confirmation unless --yes is set
 		if !skipConfirm {
 			if !confirmCommit() {
 				fmt.Fprintln(os.Stderr, "commit cancelled")
@@ -177,151 +103,10 @@ func main() {
 			fatal(fmt.Errorf("git commit failed: %s", strings.TrimSpace(string(out))))
 		}
 		fmt.Print(string(out))
-	} else {
-		if err := streamResponse(res.Body); err != nil {
-			fatal(err)
-		}
-	}
-}
-
-func exchangeCopilotToken(oauthToken string) (copilotSessionToken, error) {
-	cacheFile := filepath.Join(os.TempDir(), "gh-coco-copilot-token.json")
-
-	if data, err := os.ReadFile(cacheFile); err == nil {
-		var cached copilotSessionToken
-		if json.Unmarshal(data, &cached) == nil &&
-			cached.Token != "" &&
-			time.Now().Before(cached.ExpiresAt.Add(-2*time.Minute)) {
-			if strings.TrimSpace(cached.APIBaseURL) == "" {
-				cached.APIBaseURL = defaultAPIBaseURL
-			}
-			return cached, nil
-		}
+		return
 	}
 
-	req, err := http.NewRequest(http.MethodGet, "https://api.github.com/copilot_internal/v2/token", nil)
-	if err != nil {
-		return copilotSessionToken{}, err
-	}
-	req.Header.Set("Authorization", "token "+oauthToken)
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "tmpSoft/0.0.1")
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	res, err := client.Do(req)
-	if err != nil {
-		return copilotSessionToken{}, fmt.Errorf("token exchange request failed: %w", err)
-	}
-	defer res.Body.Close()
-
-	if res.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(res.Body, 2048))
-		return copilotSessionToken{}, fmt.Errorf("token exchange failed (%d): %s", res.StatusCode, strings.TrimSpace(string(body)))
-	}
-
-	var tokenResp struct {
-		Token     string  `json:"token"`
-		ExpiresAt float64 `json:"expires_at"`
-		Endpoints struct {
-			API string `json:"api"`
-		} `json:"endpoints"`
-	}
-	if err := json.NewDecoder(res.Body).Decode(&tokenResp); err != nil {
-		return copilotSessionToken{}, fmt.Errorf("failed to decode token response: %w", err)
-	}
-	if tokenResp.Token == "" {
-		return copilotSessionToken{}, fmt.Errorf("empty token from copilot token endpoint")
-	}
-
-	expiresAt := time.Unix(int64(tokenResp.ExpiresAt), 0)
-	if tokenResp.ExpiresAt == 0 {
-		expiresAt = time.Now().Add(25 * time.Minute)
-	}
-
-	sessionToken := copilotSessionToken{
-		Token:      tokenResp.Token,
-		ExpiresAt:  expiresAt,
-		APIBaseURL: resolveCopilotBaseURL(tokenResp.Endpoints.API),
-	}
-	if data, err := json.Marshal(sessionToken); err == nil {
-		_ = os.WriteFile(cacheFile, data, 0o600)
-	}
-
-	return sessionToken, nil
-}
-
-func resolveCopilotBaseURL(apiEndpoint string) string {
-	if baseURL := strings.TrimRight(strings.TrimSpace(apiEndpoint), "/"); baseURL != "" {
-		return baseURL
-	}
-	return defaultAPIBaseURL
-}
-
-func loadCopilotToken() (string, error) {
-	for _, key := range []string{"COPILOT_GITHUB_TOKEN", "GH_TOKEN", "GITHUB_TOKEN"} {
-		if token := strings.TrimSpace(os.Getenv(key)); token != "" {
-			return token, nil
-		}
-	}
-
-	token, err := tokenFromGhCLI()
-	if err == nil && token != "" {
-		return token, nil
-	}
-
-	return "", fmt.Errorf("no Copilot token found; set COPILOT_GITHUB_TOKEN or authenticate with `gh auth login`")
-}
-
-func tokenFromGhCLI() (string, error) {
-	out, err := exec.Command("gh", "auth", "token").CombinedOutput()
-	if err != nil {
-		return "", fmt.Errorf("failed to get token from `gh auth token`: %s", strings.TrimSpace(string(out)))
-	}
-	token := strings.TrimSpace(string(out))
-	if token == "" {
-		return "", fmt.Errorf("`gh auth token` returned an empty token")
-	}
-	return token, nil
-}
-
-func streamResponse(body io.Reader) error {
-	scanner := bufio.NewScanner(body)
-	for scanner.Scan() {
-		line := scanner.Text()
-		data, ok := strings.CutPrefix(line, "data: ")
-		if !ok || strings.TrimSpace(data) == "" || data == "[DONE]" {
-			continue
-		}
-		var chunk streamChunk
-		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
-			continue
-		}
-		if len(chunk.Choices) > 0 {
-			fmt.Print(chunk.Choices[0].Delta.Content)
-		}
-	}
-	fmt.Println()
-	return scanner.Err()
-}
-
-func collectResponse(body io.Reader) (string, error) {
-	var sb strings.Builder
-	scanner := bufio.NewScanner(body)
-	for scanner.Scan() {
-		line := scanner.Text()
-		data, ok := strings.CutPrefix(line, "data: ")
-		if !ok || strings.TrimSpace(data) == "" || data == "[DONE]" {
-			continue
-		}
-		var chunk streamChunk
-		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
-			continue
-		}
-		if len(chunk.Choices) > 0 {
-			sb.WriteString(chunk.Choices[0].Delta.Content)
-		}
-	}
-	return sb.String(), scanner.Err()
+	fmt.Println(response)
 }
 
 func stagedDiff() (string, error) {
@@ -394,30 +179,26 @@ func printHelp() {
 	globalPromptPath := filepath.Join(configDir, "gh-coco", "commit-prompt.txt")
 	fmt.Printf(`Usage: gh coco [options] [prompt]
 
-A GitHub CLI extension that uses GitHub Copilot to generate commit messages
-and answer questions via chat.
+A GitHub CLI extension that uses gh copilot to generate commit messages
+and answer questions.
 
 Modes:
-  gh coco                     Generate a conventional commit message from
-                              staged changes (git diff --staged)
-  gh coco --commit            Generate a commit message and prompt for
-                              confirmation before running git commit
+  gh coco                      Generate a conventional commit message from
+                               staged changes (git diff --staged)
+  gh coco --commit             Generate a commit message and prompt for
+                               confirmation before running git commit
   gh coco --commit --yes       Generate and commit without confirmation
-  gh coco <prompt>            Chat with Copilot
+  gh coco <prompt>             Ask gh copilot with a prompt
 
 Options:
-  -c, --commit                Generate commit message (ask for confirmation)
-  -y, --yes                   Skip confirmation and commit automatically
-  -v, --version               Show version information
-  -h, --help                  Show this help message
+  -c, --commit                 Generate commit message (ask for confirmation)
+  -y, --yes                    Skip confirmation and commit automatically
+  -m, --model <name>           Model override for gh copilot
+  -v, --version                Show version information
+  -h, --help                   Show this help message
 
 Environment variables:
-  COPILOT_GITHUB_TOKEN        GitHub token to use (overrides auto-detection)
-  GH_TOKEN                    GitHub token (fallback)
-  GITHUB_TOKEN                GitHub token (fallback)
-                              If none are set, uses 'gh auth token'
-  COPILOT_MODEL               Model to use (default: %s)
-  COPILOT_API_BASE_URL        API base URL override (auto-detected by default)
+  COPILOT_MODEL                Model to use (gpt-4.1 only, default: gpt-4.1)
 
 Commit prompt customization:
   1. %s
@@ -425,24 +206,42 @@ Commit prompt customization:
 
   The first existing non-empty file is used as the system prompt for commit
   message generation. Falls back to the built-in prompt if none are found.
-`, defaultModel, localPromptPath, globalPromptPath)
+`, localPromptPath, globalPromptPath)
 }
 
-func requestID() string {
-	var b [16]byte
-	if _, err := crand.Read(b[:]); err != nil {
-		return fmt.Sprintf("%d", time.Now().UnixNano())
+func buildCommitPrompt(systemPrompt, diff string) string {
+	return strings.TrimSpace(systemPrompt) + "\n\nStaged git diff:\n```diff\n" + diff + "\n```\n"
+}
+
+func resolveModel(raw string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "gpt-4.1", "4.1":
+		return "gpt-4.1", nil
+	case "":
+		return defaultForcedModel, nil
+	default:
+		return "", fmt.Errorf("unsupported model %q: use gpt-4.1", raw)
 	}
-	b[6] = (b[6] & 0x0f) | 0x40
-	b[8] = (b[8] & 0x3f) | 0x80
-	parts := []string{
-		hex.EncodeToString(b[0:4]),
-		hex.EncodeToString(b[4:6]),
-		hex.EncodeToString(b[6:8]),
-		hex.EncodeToString(b[8:10]),
-		hex.EncodeToString(b[10:16]),
+}
+
+func copilotCommandArgs(prompt, model string) []string {
+	args := []string{"copilot", "--", "-p", prompt, "-s", "--no-color", "--reasoning-effort", "none"}
+	if m := strings.TrimSpace(model); m != "" {
+		args = append(args, "--model", m)
 	}
-	return strings.Join(parts, "-")
+	return args
+}
+
+func runCopilotPrompt(prompt, model string) (string, error) {
+	out, err := exec.Command("gh", copilotCommandArgs(prompt, model)...).CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("gh copilot failed: %s", strings.TrimSpace(string(out)))
+	}
+	response := strings.TrimSpace(string(out))
+	if response == "" {
+		return "", fmt.Errorf("empty response from gh copilot")
+	}
+	return response, nil
 }
 
 func confirmCommit() bool {

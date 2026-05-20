@@ -9,59 +9,116 @@ import (
 	"testing"
 )
 
-func TestLoadCopilotToken_FromEnv(t *testing.T) {
-	t.Setenv("COPILOT_GITHUB_TOKEN", "env-token")
-	t.Setenv("GH_TOKEN", "")
-	t.Setenv("GITHUB_TOKEN", "")
-
-	token, err := loadCopilotToken()
-	if err != nil {
-		t.Fatal(err)
+func TestCopilotCommandArgs(t *testing.T) {
+	args := copilotCommandArgs("hello", "gpt-5")
+	joined := strings.Join(args, " ")
+	if !strings.Contains(joined, "-p hello") {
+		t.Fatalf("prompt arg missing: %q", joined)
 	}
-	if token != "env-token" {
-		t.Fatalf("got %q, want %q", token, "env-token")
+	if !strings.Contains(joined, "--reasoning-effort none") {
+		t.Fatalf("reasoning effort missing: %q", joined)
+	}
+	if !strings.Contains(joined, "--model gpt-5") {
+		t.Fatalf("model arg missing: %q", joined)
 	}
 }
 
-func TestLoadCopilotToken_FromGhCLI(t *testing.T) {
-	t.Setenv("COPILOT_GITHUB_TOKEN", "")
-	t.Setenv("GH_TOKEN", "")
-	t.Setenv("GITHUB_TOKEN", "")
+func TestCopilotCommandArgs_WithoutModel(t *testing.T) {
+	args := copilotCommandArgs("hello", "  ")
+	joined := strings.Join(args, " ")
+	if strings.Contains(joined, "--model") {
+		t.Fatalf("unexpected model arg: %q", joined)
+	}
+}
 
+func TestRunCopilotPrompt(t *testing.T) {
 	dir := t.TempDir()
 	ghPath := filepath.Join(dir, "gh")
-	if err := os.WriteFile(ghPath, []byte("#!/bin/sh\necho gh-cli-token\n"), 0o755); err != nil {
+	script := "#!/bin/sh\necho result-from-gh\n"
+	if err := os.WriteFile(ghPath, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", dir)
 
-	token, err := loadCopilotToken()
+	got, err := runCopilotPrompt("hello", "gpt-5")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if token != "gh-cli-token" {
-		t.Fatalf("got %q, want %q", token, "gh-cli-token")
+	if got != "result-from-gh" {
+		t.Fatalf("got %q, want %q", got, "result-from-gh")
 	}
 }
 
-func TestLoadCopilotToken_GhCLIFailure(t *testing.T) {
-	t.Setenv("COPILOT_GITHUB_TOKEN", "")
-	t.Setenv("GH_TOKEN", "")
-	t.Setenv("GITHUB_TOKEN", "")
-
+func TestRunCopilotPrompt_Failure(t *testing.T) {
 	dir := t.TempDir()
 	ghPath := filepath.Join(dir, "gh")
-	if err := os.WriteFile(ghPath, []byte("#!/bin/sh\necho auth failed >&2\nexit 1\n"), 0o755); err != nil {
+	script := "#!/bin/sh\necho copilot failed >&2\nexit 1\n"
+	if err := os.WriteFile(ghPath, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", dir)
 
-	_, err := loadCopilotToken()
+	_, err := runCopilotPrompt("hello", "gpt-5")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
-	if !strings.Contains(err.Error(), "gh auth login") {
-		t.Fatalf("expected error to mention gh auth login, got %q", err.Error())
+	if !strings.Contains(err.Error(), "gh copilot failed") {
+		t.Fatalf("unexpected error: %q", err.Error())
+	}
+}
+
+func TestRunCopilotPrompt_EmptyResponse(t *testing.T) {
+	dir := t.TempDir()
+	ghPath := filepath.Join(dir, "gh")
+	script := "#!/bin/sh\necho\n"
+	if err := os.WriteFile(ghPath, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir)
+
+	_, err := runCopilotPrompt("hello", "gpt-5")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "empty response") {
+		t.Fatalf("unexpected error: %q", err.Error())
+	}
+}
+
+func TestBuildCommitPrompt(t *testing.T) {
+	got := buildCommitPrompt("system", "diff --git a/a b/a")
+	if !strings.Contains(got, "system") || !strings.Contains(got, "```diff") {
+		t.Fatalf("unexpected prompt format: %q", got)
+	}
+}
+
+func TestResolveModel(t *testing.T) {
+	tests := []struct {
+		in      string
+		want    string
+		wantErr bool
+	}{
+		{"", "gpt-4.1", false},
+		{"gpt-4.1", "gpt-4.1", false},
+		{"4.1", "gpt-4.1", false},
+		{"gpt-4o", "", true},
+		{"4o", "", true},
+		{"gpt-5", "", true},
+	}
+	for _, tt := range tests {
+		got, err := resolveModel(tt.in)
+		if tt.wantErr {
+			if err == nil {
+				t.Fatalf("resolveModel(%q): expected error", tt.in)
+			}
+			continue
+		}
+		if err != nil {
+			t.Fatalf("resolveModel(%q): %v", tt.in, err)
+		}
+		if got != tt.want {
+			t.Fatalf("resolveModel(%q): got %q, want %q", tt.in, got, tt.want)
+		}
 	}
 }
 
@@ -75,54 +132,7 @@ func TestGetEnvDefault(t *testing.T) {
 	}
 }
 
-func TestResolveCopilotBaseURL_UsesEndpointAndTrimsSlash(t *testing.T) {
-	got := resolveCopilotBaseURL("https://api.business.githubcopilot.com/")
-	if got != "https://api.business.githubcopilot.com" {
-		t.Fatalf("got %q, want %q", got, "https://api.business.githubcopilot.com")
-	}
-}
-
-func TestResolveCopilotBaseURL_FallsBackToDefault(t *testing.T) {
-	got := resolveCopilotBaseURL("  ")
-	if got != defaultAPIBaseURL {
-		t.Fatalf("got %q, want %q", got, defaultAPIBaseURL)
-	}
-}
-
-func TestCollectResponse(t *testing.T) {
-	lines := []string{
-		`data: {"choices":[{"delta":{"content":"feat"},"finish_reason":null}]}`,
-		`data: {"choices":[{"delta":{"content":": add streaming"},"finish_reason":null}]}`,
-		`data: [DONE]`,
-	}
-	body := strings.NewReader(strings.Join(lines, "\n"))
-	got, err := collectResponse(body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if want := "feat: add streaming"; got != want {
-		t.Fatalf("got %q, want %q", got, want)
-	}
-}
-
-func TestCollectResponse_SkipsInvalidLines(t *testing.T) {
-	lines := []string{
-		`data: not-json`,
-		`data: {"choices":[{"delta":{"content":"ok"},"finish_reason":null}]}`,
-		``,
-	}
-	body := strings.NewReader(strings.Join(lines, "\n"))
-	got, err := collectResponse(body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got != "ok" {
-		t.Fatalf("got %q, want %q", got, "ok")
-	}
-}
-
 func TestCommitSystemPrompt_Default(t *testing.T) {
-	// Point UserConfigDir somewhere with no file to exercise the fallback path.
 	dir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", dir)
 	t.Chdir(dir)
@@ -257,25 +267,9 @@ func TestDefaultCommitSystemPrompt_ContainsRequiredElements(t *testing.T) {
 	}
 }
 
-func TestRequestID_UniqueAndFormatted(t *testing.T) {
-	ids := make(map[string]bool)
-	for i := 0; i < 10; i++ {
-		id := requestID()
-		parts := strings.Split(id, "-")
-		if len(parts) != 5 {
-			t.Fatalf("requestID %q: expected 5 parts, got %d", id, len(parts))
-		}
-		if ids[id] {
-			t.Fatalf("duplicate requestID: %q", id)
-		}
-		ids[id] = true
-	}
-}
-
 func TestConfirmCommit_Default(t *testing.T) {
 	input := strings.NewReader("\n")
 	reader := bufio.NewReader(input)
-	// Simulate pressing Enter (empty input)
 	line, _ := reader.ReadString('\n')
 	response := strings.TrimSpace(strings.ToLower(line))
 	result := response == "" || response == "y"

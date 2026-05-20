@@ -1,6 +1,6 @@
 # gh-coco
 
-`gh-coco` is a GitHub CLI extension that uses GitHub Copilot to:
+`gh-coco` is a GitHub CLI extension that uses `gh copilot` to:
 
 - generate Conventional Commit messages from staged changes
 - optionally run `git commit` with the generated message
@@ -27,24 +27,21 @@ gh coco [options] [prompt]
 3. `gh coco --commit --yes` or `gh coco -c -y`
    Generate a commit message and run `git commit` without confirmation.
 4. `gh coco "<prompt>"`
-   Chat with Copilot.
+   Ask `gh copilot` with your prompt.
 
 ## Options
 
 - `-c, --commit` Generate commit message (ask for confirmation).
 - `-y, --yes` Skip confirmation and commit automatically.
+- `-m, --model <name>` Override model (`gpt-4.1` only).
 - `-v, --version` Show version information.
 - `-h, --help` Show help.
 
 ## Environment variables
 
-These are optional. If token env vars are not set, `gh-coco` falls back to `gh auth token`.
+These are optional.
 
-- `COPILOT_GITHUB_TOKEN` (preferred)
-- `GH_TOKEN`
-- `GITHUB_TOKEN`
-- `COPILOT_MODEL` (default: `gpt-4o`)
-- `COPILOT_API_BASE_URL` (override auto-detected endpoint from token response)
+- `COPILOT_MODEL` (optional: `gpt-4.1` only, default: `gpt-4.1`)
 
 ## Commit prompt customization
 

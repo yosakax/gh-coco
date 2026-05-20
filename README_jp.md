@@ -1,6 +1,6 @@
 # gh-coco
 
-`gh-coco` は GitHub Copilot を使って次のことを行う GitHub CLI 拡張です。
+`gh-coco` は `gh copilot` を使って次のことを行う GitHub CLI 拡張です。
 
 - ステージ済み変更から Conventional Commit メッセージを生成
 - 生成したメッセージで `git commit` を実行（任意）
@@ -27,24 +27,21 @@ gh coco [options] [prompt]
 3. `gh coco --commit --yes` または `gh coco -c -y`
    確認なしでコミットメッセージを生成して `git commit` を実行します。
 4. `gh coco "<prompt>"`
-   Copilot とチャットします。
+   `gh copilot` にプロンプトを渡して実行します。
 
 ## オプション
 
 - `-c, --commit` コミットメッセージを生成（確認あり）
 - `-y, --yes` 確認をスキップして自動コミット
+- `-m, --model <name>` モデルを上書き（`gpt-4.1` のみ）
 - `-v, --version` バージョン情報を表示
 - `-h, --help` ヘルプを表示
 
 ## 環境変数
 
-以下は任意です。トークン系の環境変数を設定しない場合、`gh-coco` は `gh auth token` でトークンを取得します。
+以下は任意です。
 
-- `COPILOT_GITHUB_TOKEN`（推奨）
-- `GH_TOKEN`
-- `GITHUB_TOKEN`
-- `COPILOT_MODEL`（デフォルト: `gpt-4o`）
-- `COPILOT_API_BASE_URL`（トークン応答から自動検出されるエンドポイントを上書き）
+- `COPILOT_MODEL`（任意: `gpt-4.1` のみ、デフォルト: `gpt-4.1`）
 
 ## コミットプロンプトのカスタマイズ
 
