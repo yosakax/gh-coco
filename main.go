@@ -10,8 +10,8 @@ import (
 )
 
 const (
-	version            = "0.3.1"
-	defaultForcedModel = "gpt-4.1"
+	version            = "0.3.2"
+	defaultForcedModel = "gpt-5-mini"
 	builtInPromptName  = "built-in default"
 )
 
@@ -199,7 +199,7 @@ Options:
   -h, --help                   Show this help message
 
 Environment variables:
-  COPILOT_MODEL                Model to use (gpt-4.1 only, default: gpt-4.1)
+  COPILOT_MODEL                Model to use (gpt-5-mini only, default: gpt-5-mini)
 
 Commit prompt customization:
   1. %s
@@ -216,17 +216,17 @@ func buildCommitPrompt(systemPrompt, diff string) string {
 
 func resolveModel(raw string) (string, error) {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
-	case "gpt-4.1", "4.1":
-		return "gpt-4.1", nil
+	case "gpt-5-mini":
+		return "gpt-5-mini", nil
 	case "":
 		return defaultForcedModel, nil
 	default:
-		return "", fmt.Errorf("unsupported model %q: use gpt-4.1", raw)
+		return "", fmt.Errorf("unsupported model %q: use gpt-5-mini", raw)
 	}
 }
 
 func copilotCommandArgs(prompt, model string) []string {
-	args := []string{"copilot", "--", "-p", prompt, "-s", "--no-color", "--reasoning-effort", "none"}
+	args := []string{"copilot", "--", "-p", prompt, "-s", "--no-color", "--reasoning-effort", "low"}
 	if m := strings.TrimSpace(model); m != "" {
 		args = append(args, "--model", m)
 	}

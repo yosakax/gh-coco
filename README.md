@@ -33,7 +33,7 @@ gh coco [options] [prompt]
 
 - `-c, --commit` Generate commit message (ask for confirmation).
 - `-y, --yes` Skip confirmation and commit automatically.
-- `-m, --model <name>` Override model (`gpt-4.1` only).
+- `-m, --model <name>` Override model (`gpt-5-mini` only).
 - `-v, --version` Show version information.
 - `-h, --help` Show help.
 
@@ -41,7 +41,7 @@ gh coco [options] [prompt]
 
 These are optional.
 
-- `COPILOT_MODEL` (optional: `gpt-4.1` only, default: `gpt-4.1`)
+- `COPILOT_MODEL` (optional: `gpt-5-mini` only, default: `gpt-5-mini`)
 
 ## Commit prompt customization
 

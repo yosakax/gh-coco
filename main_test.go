@@ -15,7 +15,7 @@ func TestCopilotCommandArgs(t *testing.T) {
 	if !strings.Contains(joined, "-p hello") {
 		t.Fatalf("prompt arg missing: %q", joined)
 	}
-	if !strings.Contains(joined, "--reasoning-effort none") {
+	if !strings.Contains(joined, "--reasoning-effort low") {
 		t.Fatalf("reasoning effort missing: %q", joined)
 	}
 	if !strings.Contains(joined, "--model gpt-5") {
@@ -98,11 +98,10 @@ func TestResolveModel(t *testing.T) {
 		want    string
 		wantErr bool
 	}{
-		{"", "gpt-4.1", false},
-		{"gpt-4.1", "gpt-4.1", false},
-		{"4.1", "gpt-4.1", false},
-		{"gpt-4o", "", true},
-		{"4o", "", true},
+		{"", "gpt-5-mini", false},
+		{"gpt-5-mini", "gpt-5-mini", false},
+		{"4.1", "", true},
+		{"5-mini", "", true},
 		{"gpt-5", "", true},
 	}
 	for _, tt := range tests {

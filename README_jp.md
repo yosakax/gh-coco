@@ -33,7 +33,7 @@ gh coco [options] [prompt]
 
 - `-c, --commit` コミットメッセージを生成（確認あり）
 - `-y, --yes` 確認をスキップして自動コミット
-- `-m, --model <name>` モデルを上書き（`gpt-4.1` のみ）
+- `-m, --model <name>` モデルを上書き（`gpt-5-mini` のみ）
 - `-v, --version` バージョン情報を表示
 - `-h, --help` ヘルプを表示
 
@@ -41,7 +41,7 @@ gh coco [options] [prompt]
 
 以下は任意です。
 
-- `COPILOT_MODEL`（任意: `gpt-4.1` のみ、デフォルト: `gpt-4.1`）
+- `COPILOT_MODEL`（任意: `gpt-5-mini` のみ、デフォルト: `gpt-5-mini`）
 
 ## コミットプロンプトのカスタマイズ
 
