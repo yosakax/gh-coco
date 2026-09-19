@@ -11,7 +11,7 @@ import (
 
 const (
 	version            = "0.3.3"
-	defaultForcedModel = "gpt-6-luna"
+	defaultForcedModel = "gpt-5.6-luna"
 	builtInPromptName  = "built-in default"
 )
 
@@ -199,7 +199,7 @@ Options:
   -h, --help                   Show this help message
 
 Environment variables:
-  COPILOT_MODEL                Model to use (gpt-6-luna only, default: gpt-6-luna)
+  COPILOT_MODEL                Model to use (gpt-5.6-luna only, default: gpt-5.6-luna)
 
 Commit prompt customization:
   1. %s
@@ -216,12 +216,12 @@ func buildCommitPrompt(systemPrompt, diff string) string {
 
 func resolveModel(raw string) (string, error) {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
-	case "gpt-6-luna":
-		return "gpt-6-luna", nil
+	case "gpt-5.6-luna":
+		return "gpt-5.6-luna", nil
 	case "":
 		return defaultForcedModel, nil
 	default:
-		return "", fmt.Errorf("unsupported model %q: use gpt-6-luna", raw)
+		return "", fmt.Errorf("unsupported model %q: use gpt-5.6-luna", raw)
 	}
 }
 
