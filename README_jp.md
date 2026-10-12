@@ -12,6 +12,11 @@
 gh extension install yosakax/gh-coco
 ```
 
+## 事前準備
+
+初めて `gh-coco` を使う前に `gh copilot` を実行し、認証を完了してください。
+`gh-coco` は Copilot へのすべてのリクエストを `gh copilot` に委譲します。
+
 ## 使い方
 
 ```bash
@@ -33,7 +38,7 @@ gh coco [options] [prompt]
 
 - `-c, --commit` コミットメッセージを生成（確認あり）
 - `-y, --yes` 確認をスキップして自動コミット
-- `-m, --model <name>` モデルを上書き（`gpt-5.6-luna` のみ）
+- `-m, --model <name>` モデルを上書き（`gpt-6-luna` のみ）
 - `-v, --version` バージョン情報を表示
 - `-h, --help` ヘルプを表示
 
@@ -41,7 +46,7 @@ gh coco [options] [prompt]
 
 以下は任意です。
 
-- `COPILOT_MODEL`（任意: `gpt-5.6-luna` のみ、デフォルト: `gpt-5.6-luna`）
+- `COPILOT_MODEL`（任意: `gpt-6-luna` のみ、デフォルト: `gpt-6-luna`）
 
 ## コミットプロンプトのカスタマイズ
 

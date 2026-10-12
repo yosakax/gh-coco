@@ -10,7 +10,7 @@ import (
 )
 
 func TestCopilotCommandArgs(t *testing.T) {
-	args := copilotCommandArgs("hello", "gpt-5.6-luna")
+	args := copilotCommandArgs("hello", "gpt-6-luna")
 	joined := strings.Join(args, " ")
 	if !strings.Contains(joined, "-p hello") {
 		t.Fatalf("prompt arg missing: %q", joined)
@@ -18,7 +18,7 @@ func TestCopilotCommandArgs(t *testing.T) {
 	if !strings.Contains(joined, "--reasoning-effort low") {
 		t.Fatalf("reasoning effort missing: %q", joined)
 	}
-	if !strings.Contains(joined, "--model gpt-5.6-luna") {
+	if !strings.Contains(joined, "--model gpt-6-luna") {
 		t.Fatalf("model arg missing: %q", joined)
 	}
 }
@@ -26,7 +26,7 @@ func TestCopilotCommandArgs(t *testing.T) {
 func TestCopilotCommandArgs_WithoutModel(t *testing.T) {
 	args := copilotCommandArgs("hello", "  ")
 	joined := strings.Join(args, " ")
-	if !strings.Contains(joined, "--model gpt-5.6-luna") {
+	if !strings.Contains(joined, "--model gpt-6-luna") {
 		t.Fatalf("default model missing: %q", joined)
 	}
 }
@@ -40,7 +40,7 @@ func TestRunCopilotPrompt(t *testing.T) {
 	}
 	t.Setenv("PATH", dir)
 
-	got, err := runCopilotPrompt("hello", "gpt-5.6-luna")
+	got, err := runCopilotPrompt("hello", "gpt-6-luna")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,12 +58,30 @@ func TestRunCopilotPrompt_Failure(t *testing.T) {
 	}
 	t.Setenv("PATH", dir)
 
-	_, err := runCopilotPrompt("hello", "gpt-5.6-luna")
+	_, err := runCopilotPrompt("hello", "gpt-6-luna")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
 	if !strings.Contains(err.Error(), "gh copilot failed") {
 		t.Fatalf("unexpected error: %q", err.Error())
+	}
+}
+
+func TestRunCopilotPrompt_AuthenticationRequired(t *testing.T) {
+	dir := t.TempDir()
+	ghPath := filepath.Join(dir, "gh")
+	script := "#!/bin/sh\necho 'Error: authentication required' >&2\nexit 1\n"
+	if err := os.WriteFile(ghPath, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir)
+
+	_, err := runCopilotPrompt("hello", "gpt-6-luna")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "run `gh copilot`") {
+		t.Fatalf("expected authentication guidance, got %q", err)
 	}
 }
 
@@ -76,7 +94,7 @@ func TestRunCopilotPrompt_EmptyResponse(t *testing.T) {
 	}
 	t.Setenv("PATH", dir)
 
-	_, err := runCopilotPrompt("hello", "gpt-5.6-luna")
+	_, err := runCopilotPrompt("hello", "gpt-6-luna")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -98,8 +116,8 @@ func TestResolveModel(t *testing.T) {
 		want    string
 		wantErr bool
 	}{
-		{"", "gpt-5.6-luna", false},
-		{"gpt-5.6-luna", "gpt-5.6-luna", false},
+		{"", "gpt-6-luna", false},
+		{"gpt-6-luna", "gpt-6-luna", false},
 		{"4.1", "", true},
 		{"5-mini", "", true},
 		{"gpt-5", "", true},

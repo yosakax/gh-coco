@@ -199,7 +199,7 @@ Options:
   -h, --help                   Show this help message
 
 Environment variables:
-  COPILOT_MODEL                Model to use (gpt-5.6-luna only, default: gpt-5.6-luna)
+  COPILOT_MODEL                Model to use (gpt-6-luna only, default: gpt-6-luna)
 
 Commit prompt customization:
   1. %s
@@ -216,12 +216,12 @@ func buildCommitPrompt(systemPrompt, diff string) string {
 
 func resolveModel(raw string) (string, error) {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
-	case "gpt-5.6-luna":
-		return "gpt-5.6-luna", nil
+	case "gpt-6-luna":
+		return "gpt-6-luna", nil
 	case "":
 		return defaultForcedModel, nil
 	default:
-		return "", fmt.Errorf("unsupported model %q: use gpt-5.6-luna", raw)
+		return "", fmt.Errorf("unsupported model %q: use gpt-6-luna", raw)
 	}
 }
 
@@ -238,13 +238,36 @@ func copilotCommandArgs(prompt, model string) []string {
 func runCopilotPrompt(prompt, model string) (string, error) {
 	out, err := exec.Command("gh", copilotCommandArgs(prompt, model)...).CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("gh copilot failed: %s", strings.TrimSpace(string(out)))
+		message := strings.TrimSpace(string(out))
+		if isCopilotAuthenticationError(message) {
+			return "", fmt.Errorf("gh copilot authentication is required; run `gh copilot` and complete the sign-in flow, then retry: %s", message)
+		}
+		return "", fmt.Errorf("gh copilot failed: %s", message)
 	}
 	response := strings.TrimSpace(string(out))
 	if response == "" {
 		return "", fmt.Errorf("empty response from gh copilot")
 	}
 	return response, nil
+}
+
+func isCopilotAuthenticationError(message string) bool {
+	normalized := strings.ToLower(message)
+	indicators := []string{
+		"authentication required",
+		"not authenticated",
+		"not logged in",
+		"please log in",
+		"please login",
+		"gh auth login",
+		"copilot login",
+	}
+	for _, indicator := range indicators {
+		if strings.Contains(normalized, indicator) {
+			return true
+		}
+	}
+	return false
 }
 
 func confirmCommit() bool {

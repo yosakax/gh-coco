@@ -12,6 +12,11 @@
 gh extension install yosakax/gh-coco
 ```
 
+## Prerequisites
+
+Before using `gh-coco` for the first time, run `gh copilot` and complete its
+authentication flow. `gh-coco` delegates all Copilot requests to `gh copilot`.
+
 ## Usage
 
 ```bash
@@ -33,7 +38,7 @@ gh coco [options] [prompt]
 
 - `-c, --commit` Generate commit message (ask for confirmation).
 - `-y, --yes` Skip confirmation and commit automatically.
-- `-m, --model <name>` Override model (`gpt-5.6-luna` only).
+- `-m, --model <name>` Override model (`gpt-6-luna` only).
 - `-v, --version` Show version information.
 - `-h, --help` Show help.
 
@@ -41,7 +46,7 @@ gh coco [options] [prompt]
 
 These are optional.
 
-- `COPILOT_MODEL` (optional: `gpt-5.6-luna` only, default: `gpt-5.6-luna`)
+- `COPILOT_MODEL` (optional: `gpt-6-luna` only, default: `gpt-6-luna`)
 
 ## Commit prompt customization
 
