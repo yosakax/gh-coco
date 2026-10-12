@@ -10,8 +10,8 @@ import (
 )
 
 const (
-	version            = "0.3.3"
-	defaultForcedModel = "gpt-5.6-luna"
+	version            = "0.3.4"
+	defaultForcedModel = "gpt-6-luna"
 	builtInPromptName  = "built-in default"
 )
 
