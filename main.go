@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	version            = "0.3.4"
+	version            = "0.3.5"
 	defaultForcedModel = "gpt-6-luna"
 	builtInPromptName  = "built-in default"
 )
@@ -42,8 +42,8 @@ func main() {
 			fmt.Println(version)
 			return
 		default:
-			if strings.HasPrefix(a, "--model=") {
-				model = strings.TrimPrefix(a, "--model=")
+			if after, ok := strings.CutPrefix(a, "--model="); ok {
+				model = after
 				continue
 			}
 			args = append(args, a)
